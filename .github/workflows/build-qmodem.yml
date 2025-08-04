@@ -44,7 +44,7 @@ jobs:
       run: make package/qmodem/compile -j$(nproc)
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: qmodem-packages
         path: bin/packages/*/base/*qmodem*.ipk
