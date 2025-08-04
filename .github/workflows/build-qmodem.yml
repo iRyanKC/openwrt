@@ -1,4 +1,4 @@
-name: Build QModem Package
+name: QModem Build
 
 on:
   push:
@@ -9,29 +9,41 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # 1. 检出代码
+      # 1. 检出仓库
       - name: 检出仓库
         uses: actions/checkout@v4
 
-      # 2. 初始化 OpenWrt 构建环境
-      - name: 初始化 OpenWrt 构建环境
+      # 2. 安装依赖
+      - name: 安装编译依赖
         run: |
-          sudo apt update && sudo apt install -y build-essential libncurses-dev flex bison libssl-dev
+          sudo apt update
+          sudo apt install -y build-essential libncurses-dev flex bison libssl-dev
+
+      # 3. 克隆 OpenWrt 环境
+      - name: 克隆 OpenWrt
+        run: |
           git clone https://github.com/openwrt/openwrt.git -b v22.03.5 ./openwrt
           cp feeds.conf.default openwrt/feeds.conf.default
           cd openwrt
           ./scripts/feeds update -a
           ./scripts/feeds install -a -p qmodem
 
-      # 3. 编译 QModem 插件
-      - name: 编译 QModem 插件
+      # 4. 自动启用 QModem 插件
+      - name: 配置编译选项
+        run: |
+          cd openwrt
+          echo "CONFIG_PACKAGE_luci-app-qmodem=y" >> .config
+          make defconfig
+
+      # 5. 编译 QModem 插件
+      - name: 编译 QModem
         run: |
           cd openwrt
           make package/qmodem/compile V=s
 
-      # 4. 上传 IPK 文件（关键修复点：升级到 v4）
+      # 6. 上传 IPK 文件
       - name: 上传 IPK 文件
-        uses: actions/upload-artifact@v4  # ← 此处从 v3 升级到 v4
+        uses: actions/upload-artifact@v4
         with:
           name: qmodem-ipk
           path: openwrt/bin/targets/mt7621/generic/packages/luci-app-qmodem_*.ipk
