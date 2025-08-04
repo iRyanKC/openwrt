@@ -1,0 +1,45 @@
+name: Build QModem Package
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v3
+
+      - name: 初始化 OpenWrt 构建环境
+        run: |
+          sudo apt update && sudo apt install -y build-essential libncurses-dev flex bison libssl-dev
+          git clone https://github.com/openwrt/openwrt.git -b v22.03.5 ./openwrt
+          cp feeds.conf.default openwrt/feeds.conf.default
+          cd openwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a -p qmodem
+
+      - name: 配置编译目标（MT7621）
+        run: |
+          cd openwrt
+          make menuconfig
+          # 手动操作（见下文说明）：
+          # 1. 选择 Target System -> MediaTek MT7621
+          # 2. 选择 LuCI -> Applications -> luci-app-qmodem（核心）
+          # 3. 保存并退出
+
+      - name: 开始编译 QModem 插件
+        run: |
+          cd openwrt
+          make package/qmodem/compile V=s
+
+      - name: 打包并上传 IPK 文件
+        run: |
+          cd openwrt
+          find . -name "*.ipk" -exec cp {} ../ipk/ \;
+        uses: actions/upload-artifact@v3
+        with:
+          name: qmodem-ipk
+          path: ipk/
