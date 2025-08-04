@@ -1,50 +1,56 @@
 name: Build QModem for MT7621
 
 on:
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: openwrtorg/sdk:mt7621  # 指定你的路由器芯片 SDK
-
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Prepare OpenWrt SDK
+    - name: Set up OpenWrt SDK
       run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses5-dev git python3 python3-distutils
+        git clone https://github.com/openwrt/openwrt.git
+        cd openwrt
+        git checkout v22.03.5  # 使用稳定版本
+
+    - name: Prepare feeds
+      run: |
+        cd openwrt
         ./scripts/feeds update -a
         ./scripts/feeds install -a
 
     - name: Add QModem feed
       run: |
+        cd openwrt
         echo 'src-git qmodem https://github.com/FUjr/QModem.git;main' >> feeds.conf.default
         ./scripts/feeds update qmodem
         ./scripts/feeds install -a -p qmodem
-        ./scripts/feeds install -a -f -p qmodem  # 强制覆盖
+        ./scripts/feeds install -a -f -p qmodem
 
-    - name: Configure packages
+    - name: Configure for Xiaomi Mi Router 3G
       run: |
-        echo "CONFIG_TARGET_ramips=y" > .config
-        echo "CONFIG_TARGET_ramips_mt7621=y" >> .config
-        echo "CONFIG_TARGET_ramips_mt7621_DEVICE_xiaomi_mir3g=y" >> .config
-        
-        # 选择 QModem 组件
-        echo "CONFIG_PACKAGE_luci-app-qmodem=y" >> .config
-        echo "CONFIG_PACKAGE_luci-app-qmodem-sms=y" >> .config
-        # 添加其他需要的组件（可选）
-        # echo "CONFIG_PACKAGE_luci-app-qmodem-mwan=y" >> .config
-        # echo "CONFIG_PACKAGE_luci-app-qmodem-ttl=y" >> .config
-        
+        cd openwrt
+        cat > .config <<EOF
+CONFIG_TARGET_ramips=y
+CONFIG_TARGET_ramips_mt7621=y
+CONFIG_TARGET_ramips_mt7621_DEVICE_xiaomi_mir3g=y
+CONFIG_PACKAGE_luci-app-qmodem=y
+CONFIG_PACKAGE_luci-app-qmodem-sms=y
+EOF
         make defconfig
 
     - name: Build packages
-      run: make package/qmodem/compile -j$(nproc)
+      run: |
+        cd openwrt
+        make -j$(nproc) package/qmodem/compile
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: qmodem-packages
-        path: bin/packages/*/base/*qmodem*.ipk
+        path: openwrt/bin/packages/*/base/*qmodem*.ipk
